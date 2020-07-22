@@ -135,7 +135,7 @@ class GUI(unittest.TestCase):
         window.on_convert_button_clicked()
 
         # wait for the assertions until all files are converted
-        while window.converter.finished_tasks < len(expectation):
+        while window.audio.finished_tasks < len(expectation):
             # as Gtk.main is replaced by gtk_iteration, the unittests
             # are responsible about when soundconverter continues
             # to work on the conversions and updating the GUI

@@ -20,7 +20,6 @@
 # USA
 
 import os
-from os.path import basename, dirname
 from random import random
 import time
 import sys
@@ -33,7 +32,7 @@ from gettext import ngettext
 from gi.repository import GObject, Gtk, Gio, Gdk, GLib
 
 from soundconverter.util.fileoperations import filename_to_uri, beautify_uri, unquote_filename, vfs_walk, vfs_exists
-from soundconverter.converter.gstreamer import ConverterQueue, available_elements, \
+from soundconverter.audio.gstreamer import ConverterQueue, available_elements, \
     TypeFinder, audio_profiles_list, audio_profiles_dict
 from soundconverter.util.soundfile import SoundFile
 from soundconverter.util.settings import settings, get_gio_settings
@@ -1204,7 +1203,7 @@ class SoundConverterWindow(GladeWindow):
     def close(self, *args):
         logger.debug('closing…')
         self.filelist.abort()
-        self.converter.abort()
+        self.audio.abort()
         self.widget.hide()
         self.widget.destroy()
         # wait one second…
@@ -1312,7 +1311,7 @@ class SoundConverterWindow(GladeWindow):
         perfile = {}
         for s in self.filelist.get_files():
             perfile[s] = None
-        running, progress = self.converter.get_progress(perfile)
+        running, progress = self.audio.get_progress(perfile)
         if running is True:
             self.set_progress(progress)
             for sound_file, taskprogress in perfile.items():
@@ -1335,11 +1334,11 @@ class SoundConverterWindow(GladeWindow):
             gtk_iteration()
             self.pulse_progress = i/total  # TODO: still needed?
             sound_file.progress = None
-            self.converter.add(sound_file)
+            self.audio.add(sound_file)
         # all was OK
         self.set_status()
         self.pulse_progress = None
-        self.converter.start()
+        self.audio.start()
         self.set_sensitive()
 
     def on_convert_button_clicked(self, *args):
@@ -1358,15 +1357,15 @@ class SoundConverterWindow(GladeWindow):
         self.set_sensitive()
 
     def on_button_pause_clicked(self, *args):
-        self.converter.toggle_pause(not self.converter.paused)
+        self.audio.toggle_pause(not self.audio.paused)
 
-        if self.converter.paused:
+        if self.audio.paused:
             self.current_pause_start = time.time()
         else:
             self.paused_time += time.time() - self.current_pause_start
 
     def on_button_cancel_clicked(self, *args):
-        self.converter.abort()
+        self.audio.abort()
         self.set_status(_('Canceled'))
         self.set_sensitive()
         self.conversion_ended()
@@ -1415,9 +1414,9 @@ class SoundConverterWindow(GladeWindow):
     def set_sensitive(self):
         """Update the sensitive state of UI for the current state."""
         for w in self.unsensitive_when_converting:
-            self.set_widget_sensitive(w, not self.converter.running)
+            self.set_widget_sensitive(w, not self.audio.running)
 
-        if not self.converter.running:
+        if not self.audio.running:
             self.set_widget_sensitive(
                 'remove',
                 self.filelist_selection.count_selected_rows() > 0
@@ -1442,7 +1441,7 @@ class SoundConverterWindow(GladeWindow):
             self.filelist.hide_row_progress()
             return
 
-        if self.converter.paused:
+        if self.audio.paused:
             self.progressbar.set_text(_('Paused'))
             self.widget.set_title('{} - {}'.format(_('SoundConverter'), _('Paused')))
             return
@@ -1451,7 +1450,7 @@ class SoundConverterWindow(GladeWindow):
         self.progressbar.set_fraction(fraction)
 
         if display_time:
-            t = time.time() - self.converter.run_start_time - \
+            t = time.time() - self.audio.run_start_time - \
                               self.paused_time
             if t < 1:
                 # wait a bit not to display crap
