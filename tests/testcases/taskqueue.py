@@ -37,6 +37,7 @@ class SyncSleepTask(Task):
     Multiple of those tasks can't run in parallel.
     """
     def __init__(self):
+        self.done = False
         super().__init__()
 
     def get_progress(self):
@@ -50,6 +51,7 @@ class SyncSleepTask(Task):
 
     def run(self):
         time.sleep(0.1)
+        self.done = True
         self.callback()
 
     def pause(self):
@@ -141,6 +143,12 @@ class SyncSleepTaskTest(unittest.TestCase):
         task.set_callback(done)
         task.run()
         done.assert_called_with(task)
+
+    def test_no_callback(self):
+        """Should not cause errors when no callback is added."""
+        task = SyncSleepTask()
+        task.run()
+        self.assertTrue(task.done)
 
 
 class AsyncSleepTaskTest(unittest.TestCase):

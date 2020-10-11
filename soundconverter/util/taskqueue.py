@@ -115,12 +115,13 @@ class TaskQueue:
         task : Task
             A completed task
         """
+        if task in self.done:
+            logger.warning('tried to remove task that was already done')
+            return
+
         self.done.append(task)
         task.timer.stop()
-        if task not in self.running:
-            logger.warning('tried to remove task that was already removed')
-        else:
-            self.running.remove(task)
+        self.running.remove(task)
         if self.pending.qsize() > 0:
             self.start_next()
         elif len(self.running) == 0:
@@ -196,7 +197,7 @@ class TaskQueue:
         # is the sum of all task durations and not the queues duration.
         speed = total_duration / total_processed_weight
 
-        # how many weight left per process
+        # how much weight left per process
         remaining_weight_per_p = total_remaining_weight / len(self.running)
         remaining_duration = speed * remaining_weight_per_p
 

@@ -18,3 +18,20 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
+
+import sys
+
+old_hook = sys.excepthook
+
+
+def uncaught_hook(exctype, value, traceback):
+    """To execute code when an exception is not caught."""
+    if hasattr(value, 'uncaught_hook'):
+        if callable(value.uncaught_hook):
+            value.uncaught_hook()
+    # Errors from within the GLib mainloop won't terminate the program,
+    # so calling the old excepthook is safe.
+    return old_hook(exctype, value, traceback)
+
+
+sys.excepthook = uncaught_hook

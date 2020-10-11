@@ -206,7 +206,6 @@ class Converter(Task):
         self.newname = None
         self.existing_behaviour = Converter.INCREMENT
         self.name_generator = name_generator
-        self.callback = lambda: None
 
         # All relevant gio settings have to be copied and remembered, so that
         # they don't suddenly change during the conversion
@@ -222,7 +221,6 @@ class Converter(Task):
         self.command = None
         self.pipeline = None
         self.done = False
-        self.error = None
         self.output_uri = None
 
     def _query_position(self):
