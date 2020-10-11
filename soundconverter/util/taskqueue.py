@@ -137,6 +137,9 @@ class TaskQueue:
                     # This error will then get the uncaught_hook from that
                     # task and will call task_done a second time. Avoid that
                     # by setting it to None.
+                    # This means that you cannot just call functions from within
+                    # the taskqueue, you have to wrap all of them to avoid
+                    # duplicate task_done calls.
                     e.uncaught_hook = None
                     raise e
 
