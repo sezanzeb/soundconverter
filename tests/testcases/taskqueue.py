@@ -19,6 +19,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+import sys
 import time
 import unittest
 import threading
@@ -29,6 +30,9 @@ from soundconverter.util.taskqueue import TaskQueue, Timer
 from soundconverter.util.task import Task
 from soundconverter.util.settings import get_gio_settings
 from util import reset_settings
+
+
+soundconverter_hook = sys.excepthook
 
 
 class SyncSleepTask(Task):
@@ -49,7 +53,16 @@ class SyncSleepTask(Task):
     def cancel(self):
         pass
 
+    def handled_error(self):
+        """This function will raise a handled exception and won't cause
+        problems with the automatic callback_on_error decorator."""
+        raise ValueError('Failure')
+
     def run(self):
+        try:
+            self.handled_error()
+        except ValueError:
+            pass
         time.sleep(0.1)
         self.done = True
         self.callback()
@@ -60,6 +73,12 @@ class SyncSleepTask(Task):
 
     def resume(self):
         pass
+
+
+class ErrorTask(SyncSleepTask):
+    """Task that fails."""
+    def run(self):
+        raise ValueError('Failure')
 
 
 class AsyncSleepTask(Task):
@@ -142,7 +161,7 @@ class SyncSleepTaskTest(unittest.TestCase):
         done = Mock()
         task.set_callback(done)
         task.run()
-        done.assert_called_with(task)
+        done.assert_called_once_with(task)
 
     def test_no_callback(self):
         """Should not cause errors when no callback is added."""
@@ -212,6 +231,70 @@ class AsyncSleepTaskTest(unittest.TestCase):
         time.sleep(0.15)
         context.iteration(False)
         done.assert_called_with(task)
+
+
+class CancelOnErrorTest(unittest.TestCase):
+    def setUp(self):
+        """This needs to be tested, because weird error handling stuff
+        is added in __getattribute__ of Task. For errors that are handled,
+        no extra code should be executed."""
+        self.unhandled_exception_spy = Mock()
+
+        def hook(exctype, value, traceback):
+            # expect the error to bubble up
+            self.unhandled_exception_spy()
+            soundconverter_hook(exctype, value, traceback)
+            # and then expect the queue to continue with the next task
+
+        sys.excepthook = hook
+
+    def tearDown(self):
+        sys.excepthook = soundconverter_hook
+
+    def test_single_error_task(self):
+        """It should continue with other tasks if one of them fails.
+
+        This test is expected to print a stack trace to the console."""
+        q = TaskQueue()
+        q.add(ErrorTask())
+
+        loop = GLib.MainLoop()
+
+        def done(task):
+            self.assertEqual(len(q.done), 1)
+            # even though the error reached sys.excepthook,
+            # the queue is done.
+            self.unhandled_exception_spy.assert_called_once()
+            loop.quit()
+
+        q.set_on_queue_finished(done)
+        # idle_add so that the unittest won't get the exception,
+        # but rather sys.excepthook
+        GLib.idle_add(q.run)
+        loop.run()
+
+    def test_multiple_error_tasks(self):
+        """It should continue with other tasks if one of them fails.
+
+        This test is expected to print a stack trace to the console."""
+        q = TaskQueue()
+        q.add(ErrorTask())
+        q.add(ErrorTask())
+
+        loop = GLib.MainLoop()
+
+        def done(queue):
+            self.assertEqual(len(q.done), 2)
+            # even though the error reached sys.excepthook,
+            # the queue is done.
+            self.assertEqual(self.unhandled_exception_spy.call_count, 2)
+            loop.quit()
+
+        q.set_on_queue_finished(done)
+        # idle_add so that the unittest won't get the exception,
+        # but rather sys.excepthook
+        GLib.idle_add(q.run)
+        loop.run()
 
 
 class AsyncMulticoreTaskQueueTest(unittest.TestCase):

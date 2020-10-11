@@ -20,6 +20,9 @@
 # USA
 
 
+import traceback
+
+
 class Task:
     error = None
     timer = None
@@ -77,17 +80,24 @@ class Task:
         self.callback = callback_wrapped
 
     def __getattribute__(self, name):
-        """Wrap every function call in order to skip failing tasks."""
+        """Wrap every function call in order to skip failing tasks.
+
+        So that single edge-case tasks don't screw up the whole application.
+        """
         attr = object.__getattribute__(self, name)
         if callable(attr):
-            def cancel_on_error(*args, **kwargs):
+            def callback_on_error(*args, **kwargs):
                 try:
                     return attr(*args, **kwargs)
                 except Exception as e:
                     # tell the taskqueue to go on, otherwise it will never
                     # complete and use one parallel job less. But only do
                     # that if the exception was never handled.
-                    e.uncaught_hook = self.callback
+                    if not hasattr(e, 'uncaught_hook'):
+                        # only keep the uncaught_hook of the innermost callback,
+                        # because it will bubble through the callback of the previous task
+                        # that caused the queue to run the next task.
+                        e.uncaught_hook = self.callback
                     raise e
-            return cancel_on_error
+            return callback_on_error
         return object.__getattribute__(self, name)

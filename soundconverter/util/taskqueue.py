@@ -128,7 +128,17 @@ class TaskQueue:
             self.finished = True
             self._timer.stop()
             if self._on_queue_finished is not None:
-                self._on_queue_finished(self)
+                try:
+                    self._on_queue_finished(self)
+                except Exception as e:
+                    # If there is an error, it will bubble through the callback
+                    # that caused
+                    # the call to task_done and therefore on_queue_finished.
+                    # This error will then get the uncaught_hook from that
+                    # task and will call task_done a second time. Avoid that
+                    # by setting it to None.
+                    e.uncaught_hook = None
+                    raise e
 
     def start_next(self):
         """Start the next task if available."""

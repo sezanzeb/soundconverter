@@ -19,7 +19,9 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307
 # USA
 
+
 import sys
+
 
 old_hook = sys.excepthook
 
@@ -28,7 +30,16 @@ def uncaught_hook(exctype, value, traceback):
     """To execute code when an exception is not caught."""
     if hasattr(value, 'uncaught_hook'):
         if callable(value.uncaught_hook):
-            value.uncaught_hook()
+            # execute it in the next glib tick, because if the next
+            # task is synchronous, the error will otherwise be thrown from
+            # within uncaught_hook and then uncaught_hook is not called
+            # anymore. Errors from within this idle_add will call this
+            # uncaught_hook later from scratch.
+            try:
+                value.uncaught_hook()
+            except Exception as e:
+                sys.excepthook(type(e), e, sys.last_traceback)
+                return
     # Errors from within the GLib mainloop won't terminate the program,
     # so calling the old excepthook is safe.
     return old_hook(exctype, value, traceback)
